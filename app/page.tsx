@@ -1,7 +1,5 @@
-"use client"
+import TicketSystem from "@/ticket-system"
 
-import Component from "../ticket-system"
-
-export default function Page() {
-  return <Component />
+export default function Home() {
+  return <TicketSystem />
 }

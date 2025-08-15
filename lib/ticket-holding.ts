@@ -22,15 +22,17 @@ export const HOLD_DURATION_MINUTES = 30 // 30 minutes
 
 const HOLD_DURATION = HOLD_DURATION_MINUTES * 60 * 1000 // 30 minutes in milliseconds
 
-export function holdTickets(tickets: number[], referenceId: string): void {
-  const holdExpiry = Date.now() + HOLD_DURATION
+export function holdTickets(ticketNumbers: number[], referenceId: string): string {
+  const holdStartTime = Date.now()
+  const holdExpiry = holdStartTime + HOLD_DURATION
+
   const heldTickets = getHeldTickets()
 
-  // Add new held tickets
-  tickets.forEach((ticketNumber) => {
+  // Add tickets to held tickets
+  ticketNumbers.forEach((ticketNumber) => {
     heldTickets[ticketNumber] = {
       ticketNumber,
-      holdStartTime: Date.now(),
+      holdStartTime,
       referenceId,
       isConfirmed: false,
       holdExpiry,
@@ -38,6 +40,13 @@ export function holdTickets(tickets: number[], referenceId: string): void {
   })
 
   localStorage.setItem("heldTickets", JSON.stringify(heldTickets))
+
+  // Set timeout to automatically release tickets after hold duration
+  setTimeout(() => {
+    releaseTickets(ticketNumbers)
+  }, HOLD_DURATION)
+
+  return referenceId
 }
 
 export function getHeldTickets(): { [ticketNumber: number]: HeldTicket } {
@@ -116,6 +125,16 @@ export function releaseTicket(ticketNumber: number): void {
   localStorage.setItem("heldTickets", JSON.stringify(heldTickets))
 }
 
+export function releaseTickets(ticketNumbers: number[]): void {
+  const heldTickets = getHeldTickets()
+
+  ticketNumbers.forEach((ticketNumber) => {
+    delete heldTickets[ticketNumber]
+  })
+
+  localStorage.setItem("heldTickets", JSON.stringify(heldTickets))
+}
+
 export function confirmTicketPayment(ticketNumber: number): void {
   // Remove ticket from held zone completely when confirmed
   const heldTickets = getHeldTickets()
@@ -161,7 +180,7 @@ export function cleanupExpiredHolds(): void {
 }
 
 export function savePurchase(tickets: number[], totalCost: number): string {
-  const referenceId = `REF-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+  const referenceId = generateReferenceId()
   const holdExpiry = Date.now() + HOLD_DURATION
 
   const purchase: Purchase = {
@@ -203,4 +222,9 @@ export function getAllPurchasedTicketNumbers(): number[] {
   })
 
   return [...new Set(allTickets)].sort((a, b) => a - b)
+}
+
+// Generate a unique reference ID
+function generateReferenceId(): string {
+  return `REF-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
 }
