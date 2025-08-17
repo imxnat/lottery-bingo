@@ -29,8 +29,6 @@ import { useRouter } from "next/navigation"
 import { getInitialTicketData, confirmTicketPaymentAction } from "@/app/actions"
 import { releaseTicket } from "@/lib/ticket-holding"
 import { getTicketPrice, setTicketPrice, getTicketPricing } from "@/lib/ticket-pricing"
-import { isAdminAuthenticated, clearAdminSession, updateLastActivity } from "@/lib/admin-auth"
-import { AdminLogin } from "@/components/admin-login"
 import { toast } from "@/components/ui/use-toast"
 import {
   AlertDialog,
@@ -44,8 +42,6 @@ import {
 } from "@/components/ui/alert-dialog"
 
 export default function AdminPage() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [soldTickets, setSoldTickets] = useState<number[]>([])
   const [heldTickets, setHeldTickets] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,44 +57,7 @@ export default function AdminPage() {
 
   const totalNumbers = 10000
 
-  // Check authentication on component mount
-  useEffect(() => {
-    const checkAuth = () => {
-      const authenticated = isAdminAuthenticated()
-      setIsAuthenticated(authenticated)
-      setIsCheckingAuth(false)
-
-      if (authenticated) {
-        updateLastActivity()
-      }
-    }
-
-    checkAuth()
-  }, [])
-
-  // Update last activity on user interaction
-  useEffect(() => {
-    if (isAuthenticated) {
-      const handleActivity = () => {
-        updateLastActivity()
-      }
-
-      // Add event listeners for user activity
-      window.addEventListener("click", handleActivity)
-      window.addEventListener("keypress", handleActivity)
-      window.addEventListener("scroll", handleActivity)
-
-      return () => {
-        window.removeEventListener("click", handleActivity)
-        window.removeEventListener("keypress", handleActivity)
-        window.removeEventListener("scroll", handleActivity)
-      }
-    }
-  }, [isAuthenticated])
-
   const fetchData = async () => {
-    if (!isAuthenticated) return
-
     setLoading(true)
     try {
       const data = await getInitialTicketData()
@@ -121,18 +80,11 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchData()
-      // Refresh data every 5 seconds
-      const interval = setInterval(fetchData, 5000)
-      return () => clearInterval(interval)
-    }
-  }, [isAuthenticated])
-
-  const handleLoginSuccess = () => {
-    setIsAuthenticated(true)
-    updateLastActivity()
-  }
+    fetchData()
+    // Refresh data every 5 seconds
+    const interval = setInterval(fetchData, 5000)
+    return () => clearInterval(interval)
+  }, [])
 
   const handleConfirmPayment = async (ticketNumber: number) => {
     setConfirmingPayment(ticketNumber)
@@ -272,31 +224,17 @@ export default function AdminPage() {
   }
 
   const handleLogout = () => {
-    // Clear admin session
-    clearAdminSession()
-    setIsAuthenticated(false)
+    // Clear any admin session data
+    localStorage.removeItem("adminSession")
+    localStorage.removeItem("adminLoginTime")
 
     toast({
       title: "Sesión Cerrada",
-      description: "Has cerrado sesión exitosamente. Deberás autenticarte nuevamente para acceder.",
+      description: "Has cerrado sesión exitosamente",
     })
-  }
 
-  // Show loading spinner while checking authentication
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Verificando autenticación...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // Show login form if not authenticated
-  if (!isAuthenticated) {
-    return <AdminLogin onLoginSuccess={handleLoginSuccess} />
+    // Redirect to main page
+    router.push("/")
   }
 
   // Filter held tickets based on search
@@ -330,7 +268,7 @@ export default function AdminPage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="bg-yellow-500 bg-opacity-20 border-yellow-300 border-opacity-50 text-white hover:bg-yellow-500 hover:bg-opacity-30"
+                    className="bg-red-500 bg-opacity-20 border-red-300 border-opacity-50 text-white hover:bg-red-500 hover:bg-opacity-30"
                     disabled={resettingSystem}
                   >
                     <RotateCcw className="h-4 w-4 mr-2" />
@@ -397,44 +335,15 @@ export default function AdminPage() {
                 <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
                 Actualizar
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-red-600 border-red-600 text-white hover:bg-red-700 hover:border-red-700"
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Cerrar Sesión
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center gap-2 text-orange-600">
-                      <LogOut className="h-5 w-5" />
-                      ¿Cerrar Sesión de Administrador?
-                    </AlertDialogTitle>
-                  </AlertDialogHeader>
-                  <div className="space-y-4">
-                    <p className="text-gray-600">
-                      Estás a punto de cerrar tu sesión de administrador. Deberás ingresar tu contraseña nuevamente para
-                      acceder al panel.
-                    </p>
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                      <p className="text-sm text-yellow-800">
-                        <strong>Nota:</strong> Asegúrate de haber guardado todos los cambios antes de cerrar sesión.
-                      </p>
-                    </div>
-                  </div>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleLogout} className="bg-red-600 hover:bg-red-700">
-                      <LogOut className="h-4 w-4 mr-2" />
-                      Sí, Cerrar Sesión
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                size="sm"
+                className="bg-red-500 bg-opacity-20 border-red-300 border-opacity-50 text-white hover:bg-red-500 hover:bg-opacity-30"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Cerrar Sesión
+              </Button>
             </div>
           </div>
           <div className="text-center">

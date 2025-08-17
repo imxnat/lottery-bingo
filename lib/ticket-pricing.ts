@@ -1,38 +1,53 @@
 interface TicketPricing {
-  price: number
+  currentPrice: number
   lastUpdated: string
   updatedBy: string
+  priceHistory: Array<{
+    price: number
+    date: string
+    updatedBy: string
+  }>
 }
 
-const TICKET_PRICING_KEY = "ticketPricing"
 const DEFAULT_PRICE = 5.0
+const STORAGE_KEY = "ticketPricing"
 
 export function getTicketPrice(): number {
   if (typeof window === "undefined") return DEFAULT_PRICE
 
   try {
-    const stored = localStorage.getItem(TICKET_PRICING_KEY)
-    if (stored) {
-      const pricing: TicketPricing = JSON.parse(stored)
-      return pricing.price || DEFAULT_PRICE
-    }
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (!stored) return DEFAULT_PRICE
+
+    const pricing: TicketPricing = JSON.parse(stored)
+    return pricing.currentPrice || DEFAULT_PRICE
   } catch (error) {
     console.error("Error getting ticket price:", error)
+    return DEFAULT_PRICE
   }
-
-  return DEFAULT_PRICE
 }
 
-export function setTicketPrice(price: number, updatedBy = "System"): void {
+export function setTicketPrice(price: number, updatedBy = "Sistema"): void {
   if (typeof window === "undefined") return
 
   try {
-    const pricing: TicketPricing = {
-      price,
+    const currentPricing = getTicketPricing()
+
+    const newPricing: TicketPricing = {
+      currentPrice: price,
       lastUpdated: new Date().toISOString(),
       updatedBy,
+      priceHistory: [
+        ...currentPricing.priceHistory,
+        {
+          price: currentPricing.currentPrice,
+          date: currentPricing.lastUpdated,
+          updatedBy: currentPricing.updatedBy,
+        },
+      ],
     }
-    localStorage.setItem(TICKET_PRICING_KEY, JSON.stringify(pricing))
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newPricing))
   } catch (error) {
     console.error("Error setting ticket price:", error)
   }
@@ -41,30 +56,53 @@ export function setTicketPrice(price: number, updatedBy = "System"): void {
 export function getTicketPricing(): TicketPricing {
   if (typeof window === "undefined") {
     return {
-      price: DEFAULT_PRICE,
+      currentPrice: DEFAULT_PRICE,
       lastUpdated: new Date().toISOString(),
-      updatedBy: "System",
+      updatedBy: "Sistema",
+      priceHistory: [],
     }
   }
 
   try {
-    const stored = localStorage.getItem(TICKET_PRICING_KEY)
-    if (stored) {
-      return JSON.parse(stored)
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (!stored) {
+      const defaultPricing: TicketPricing = {
+        currentPrice: DEFAULT_PRICE,
+        lastUpdated: new Date().toISOString(),
+        updatedBy: "Sistema",
+        priceHistory: [],
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultPricing))
+      return defaultPricing
     }
+
+    return JSON.parse(stored)
   } catch (error) {
     console.error("Error getting ticket pricing:", error)
+    return {
+      currentPrice: DEFAULT_PRICE,
+      lastUpdated: new Date().toISOString(),
+      updatedBy: "Sistema",
+      priceHistory: [],
+    }
   }
+}
 
-  // Return default pricing if nothing stored
-  const defaultPricing: TicketPricing = {
-    price: DEFAULT_PRICE,
-    lastUpdated: new Date().toISOString(),
-    updatedBy: "System",
+export function getPriceHistory(): Array<{
+  price: number
+  date: string
+  updatedBy: string
+}> {
+  const pricing = getTicketPricing()
+  return pricing.priceHistory
+}
+
+export function resetPricing(): void {
+  if (typeof window === "undefined") return
+
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch (error) {
+    console.error("Error resetting pricing:", error)
   }
-
-  // Store default pricing
-  setTicketPrice(DEFAULT_PRICE, "System")
-
-  return defaultPricing
 }

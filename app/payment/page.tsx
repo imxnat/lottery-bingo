@@ -9,53 +9,33 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { getTicketPrice } from "@/lib/ticket-pricing"
 import { HOLD_DURATION_MINUTES } from "@/lib/ticket-holding"
 import { savePurchaseAndHoldTickets } from "@/app/actions"
-
-// Safe function to get ticket price with fallback
-function getTicketPriceSafe(): number {
-  try {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("ticketPricing")
-      if (stored) {
-        const pricing = JSON.parse(stored)
-        return pricing.price || 5.0
-      }
-    }
-  } catch (error) {
-    console.error("Error getting ticket price:", error)
-  }
-  return 5.0
-}
 
 export default function PaymentPage() {
   const router = useRouter()
   const [selectedTickets, setSelectedTickets] = useState<number[]>([])
-  const [totalCost, setTotalCost] = useState<number>(0)
+  const [totalCost, setTotalCost] = useState(0)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [referenceId, setReferenceId] = useState("")
   const [isProcessing, setIsProcessing] = useState(false)
-  const [ticketPrice, setTicketPrice] = useState<number>(5.0)
+  const [ticketPrice, setTicketPrice] = useState(5.0)
 
   useEffect(() => {
     const tickets = localStorage.getItem("selectedTickets")
     const cost = localStorage.getItem("totalCost")
 
-    // Get current ticket price with safe fallback
-    const currentPrice = getTicketPriceSafe()
+    // Get current ticket price
+    const currentPrice = getTicketPrice()
     setTicketPrice(currentPrice)
 
     if (tickets && cost) {
-      try {
-        const ticketNumbers = JSON.parse(tickets)
-        setSelectedTickets(ticketNumbers || [])
-        // Recalculate total cost with current price
-        const recalculatedCost = (ticketNumbers?.length || 0) * currentPrice
-        setTotalCost(recalculatedCost)
-      } catch (error) {
-        console.error("Error parsing ticket data:", error)
-        router.push("/")
-      }
+      const ticketNumbers = JSON.parse(tickets)
+      setSelectedTickets(ticketNumbers)
+      // Recalculate total cost with current price
+      const recalculatedCost = ticketNumbers.length * currentPrice
+      setTotalCost(recalculatedCost)
     } else {
       router.push("/")
     }
@@ -94,10 +74,6 @@ export default function PaymentPage() {
     router.push("/")
   }
 
-  // Ensure all values are safe numbers
-  const safeTicketPrice = typeof ticketPrice === "number" && !isNaN(ticketPrice) ? ticketPrice : 5.0
-  const safeTotalCost = typeof totalCost === "number" && !isNaN(totalCost) ? totalCost : 0
-
   if (showConfirmation) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4 sm:p-6">
@@ -128,11 +104,11 @@ export default function PaymentPage() {
                 </div>
                 <div className="flex justify-between items-center p-2 bg-white rounded-lg">
                   <span className="font-medium">Precio por Boleto:</span>
-                  <span className="font-bold text-green-600">${safeTicketPrice.toFixed(2)}</span>
+                  <span className="font-bold text-green-600">${ticketPrice.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center p-2 bg-white rounded-lg">
                   <span className="font-medium">Monto Total:</span>
-                  <span className="font-bold text-green-600 text-lg">${safeTotalCost.toFixed(2)}</span>
+                  <span className="font-bold text-green-600 text-lg">${totalCost.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between items-center p-2 bg-white rounded-lg text-xs sm:text-sm">
                   <span className="font-medium">ID de Referencia:</span>
@@ -248,10 +224,16 @@ export default function PaymentPage() {
               <CardHeader className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-t-lg">
                 <CardTitle className="flex items-center gap-2 text-xl">
                   <Info className="h-5 w-5 text-orange-600" />
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5 text-orange-600"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>Métodos de Pago
+                  Información Importante
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4 p-6">
+                <Alert className="border-blue-200 bg-gradient-to-r from-blue-50 to-cyan-50">
+                  <AlertDescription className="text-sm">
+                    <strong>Fecha del Sorteo:</strong> El próximo sorteo se realizará el domingo a las 8:00 PM EST
+                  </AlertDescription>
+                </Alert>
+
                 <Alert className="border-orange-200 bg-gradient-to-r from-orange-50 to-yellow-50">
                   <Clock className="h-4 w-4 text-orange-600" />
                   <AlertDescription className="text-sm">
@@ -265,7 +247,7 @@ export default function PaymentPage() {
                   <div className="bg-gray-50 p-4 rounded-lg">
                     <h4 className="font-semibold mb-2 text-gray-800">Cómo funciona:</h4>
                     <ul className="list-disc list-inside space-y-1 text-gray-600">
-                      <li>Cada boleto cuesta ${safeTicketPrice.toFixed(2)}</li>
+                      <li>Cada boleto cuesta ${ticketPrice.toFixed(2)}</li>
                       <li>Los boletos se retienen por {HOLD_DURATION_MINUTES} minutos</li>
                       <li>Los ganadores se anuncian en 24 horas</li>
                       <li>Premios según boletos coincidentes</li>
@@ -306,12 +288,12 @@ export default function PaymentPage() {
                   </div>
                   <div className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
                     <span className="text-sm font-medium">Precio por Boleto:</span>
-                    <span className="font-medium">${safeTicketPrice.toFixed(2)}</span>
+                    <span className="font-medium">${ticketPrice.toFixed(2)}</span>
                   </div>
                   <Separator />
                   <div className="flex justify-between text-lg font-bold bg-gradient-to-r from-green-50 to-blue-50 p-3 rounded-lg">
                     <span>Total:</span>
-                    <span className="text-green-600">${safeTotalCost.toFixed(2)}</span>
+                    <span className="text-green-600">${totalCost.toFixed(2)}</span>
                   </div>
                 </div>
 

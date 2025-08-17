@@ -11,23 +11,8 @@ import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { getInitialTicketData, getTicketHoldInfoAction } from "@/app/actions"
+import { getTicketPrice } from "@/lib/ticket-pricing"
 import { HOLD_DURATION_MINUTES } from "@/lib/ticket-holding"
-
-// Safe function to get ticket price with fallback
-function getTicketPriceSafe(): number {
-  try {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("ticketPricing")
-      if (stored) {
-        const pricing = JSON.parse(stored)
-        return pricing.price || 5.0
-      }
-    }
-  } catch (error) {
-    console.error("Error getting ticket price:", error)
-  }
-  return 5.0
-}
 
 export default function Component() {
   const [selectedTickets, setSelectedTickets] = useState<number[]>([])
@@ -36,28 +21,20 @@ export default function Component() {
   const [showCart, setShowCart] = useState(false)
   const [searchTicket, setSearchTicket] = useState("")
   const [holdInfos, setHoldInfos] = useState<{ [key: number]: any }>({})
-  const [ticketPrice, setTicketPrice] = useState<number>(5.0)
+  const [ticketPrice, setTicketPrice] = useState(5.0)
   const router = useRouter()
   const cartRef = useRef<HTMLDivElement>(null)
 
   const totalNumbers = 10000 // 0 to 9999
 
   const fetchTicketStatus = useCallback(async () => {
-    try {
-      const data = await getInitialTicketData()
-      setSoldTickets(data.soldTickets || [])
-      setHeldTickets(data.heldTickets || [])
+    const data = await getInitialTicketData()
+    setSoldTickets(data.soldTickets)
+    setHeldTickets(data.heldTickets)
 
-      // Update ticket price from storage with safe fallback
-      const currentPrice = getTicketPriceSafe()
-      setTicketPrice(currentPrice)
-    } catch (error) {
-      console.error("Error fetching ticket status:", error)
-      // Set defaults on error
-      setSoldTickets([])
-      setHeldTickets([])
-      setTicketPrice(5.0)
-    }
+    // Update ticket price from storage
+    const currentPrice = getTicketPrice()
+    setTicketPrice(currentPrice)
   }, [])
 
   useEffect(() => {
@@ -67,16 +44,10 @@ export default function Component() {
   }, [fetchTicketStatus])
 
   useEffect(() => {
-    if (heldTickets.length > 0) {
-      heldTickets.forEach(async (ticket) => {
-        try {
-          const info = await getTicketHoldInfoAction(ticket)
-          setHoldInfos((prev) => ({ ...prev, [ticket]: info }))
-        } catch (error) {
-          console.error(`Error getting hold info for ticket ${ticket}:`, error)
-        }
-      })
-    }
+    heldTickets.forEach(async (ticket) => {
+      const info = await getTicketHoldInfoAction(ticket)
+      setHoldInfos((prev) => ({ ...prev, [ticket]: info }))
+    })
   }, [heldTickets])
 
   const toggleTicket = (number: number) => {
@@ -130,9 +101,7 @@ export default function Component() {
     }
   }
 
-  // Ensure ticketPrice is always a valid number
-  const safeTicketPrice = typeof ticketPrice === "number" && !isNaN(ticketPrice) ? ticketPrice : 5.0
-  const totalCost = selectedTickets.length * safeTicketPrice
+  const totalCost = selectedTickets.length * ticketPrice
   const availableCount = totalNumbers - soldTickets.length - heldTickets.length
 
   const filteredTickets = Array.from({ length: totalNumbers }, (_, i) => i).filter(
@@ -162,9 +131,9 @@ export default function Component() {
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold mb-6 leading-tight">
               🎰{" "}
               <span className="bg-gradient-to-r from-yellow-300 to-yellow-500 bg-clip-text text-transparent">
-                BINGO
+                LOTERÍA
               </span>{" "}
-              FORTUNA
+              PREMIUM
             </h1>
             <p className="text-xl sm:text-2xl mb-8 opacity-95 max-w-3xl mx-auto leading-relaxed">
               ¡Tu oportunidad de ganar grandes premios está aquí! Selecciona tus números de la suerte y participa en el
@@ -172,7 +141,23 @@ export default function Component() {
             </p>
 
             {/* Prize Information */}
-            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 max-w-4xl mx-auto">
+              <div className="bg-white bg-opacity-15 backdrop-blur-sm border border-white border-opacity-20 rounded-xl p-6 transform hover:scale-105 transition-all duration-300">
+                <div className="text-3xl mb-2">🏆</div>
+                <div className="text-2xl font-bold text-yellow-300">$50,000</div>
+                <div className="text-sm opacity-90">Premio Mayor</div>
+              </div>
+              <div className="bg-white bg-opacity-15 backdrop-blur-sm border border-white border-opacity-20 rounded-xl p-6 transform hover:scale-105 transition-all duration-300">
+                <div className="text-3xl mb-2">🎫</div>
+                <div className="text-2xl font-bold text-green-300">{availableCount.toLocaleString()}</div>
+                <div className="text-sm opacity-90">Boletos Disponibles</div>
+              </div>
+              <div className="bg-white bg-opacity-15 backdrop-blur-sm border border-white border-opacity-20 rounded-xl p-6 transform hover:scale-105 transition-all duration-300">
+                <div className="text-3xl mb-2">💰</div>
+                <div className="text-2xl font-bold text-blue-300">${ticketPrice.toFixed(2)}</div>
+                <div className="text-sm opacity-90">Por Boleto</div>
+              </div>
+            </div>
 
             {/* Call to Action */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -185,7 +170,7 @@ export default function Component() {
               >
                 🎯 ¡SELECCIONAR NÚMEROS!
               </Button>
-              
+              <div className="text-sm opacity-90">⏰ Sorteo: Domingo 8:00 PM EST</div>
             </div>
           </div>
         </div>
@@ -203,7 +188,7 @@ export default function Component() {
                     🎫 {availableCount} boletos disponibles
                   </Badge>
                   <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                    💰 ${safeTicketPrice.toFixed(2)} por boleto
+                    💰 ${ticketPrice.toFixed(2)} por boleto
                   </Badge>
                   {soldTickets.length > 0 && (
                     <Badge variant="outline" className="bg-red-100 text-red-700 border-red-300">
@@ -268,8 +253,8 @@ export default function Component() {
                     </div>
                   </div>
                   <CardDescription className="text-sm sm:text-base">
-                    Haz clic en cualquier número disponible para seleccionarlo. Precio: ${safeTicketPrice.toFixed(2)}{" "}
-                    por boleto.
+                    Haz clic en cualquier número disponible para seleccionarlo. Precio: ${ticketPrice.toFixed(2)} por
+                    boleto.
                     <br />
                     <span className="font-medium">
                       {searchTicket ? (
@@ -380,7 +365,7 @@ export default function Component() {
                               >
                                 <span className="font-medium">Boleto #{ticket}</span>
                                 <div className="flex items-center gap-2">
-                                  <span className="text-green-600 font-bold">${safeTicketPrice.toFixed(2)}</span>
+                                  <span className="text-green-600 font-bold">${ticketPrice.toFixed(2)}</span>
                                   <Button
                                     size="sm"
                                     variant="ghost"
@@ -427,12 +412,29 @@ export default function Component() {
           </div>
 
           {/* Statistics Section */}
-          
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+              <div className="text-2xl font-bold text-blue-600">{totalNumbers.toLocaleString()}</div>
+              <div className="text-sm text-blue-800">Total de Boletos</div>
+            </Card>
+            <Card className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+              <div className="text-2xl font-bold text-green-600">{availableCount.toLocaleString()}</div>
+              <div className="text-sm text-green-800">Disponibles</div>
+            </Card>
+            <Card className="text-center p-4 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200">
+              <div className="text-2xl font-bold text-orange-600">{heldTickets.length.toLocaleString()}</div>
+              <div className="text-sm text-orange-800">Retenidos</div>
+            </Card>
+            <Card className="text-center p-4 bg-gradient-to-br from-red-50 to-red-100 border-red-200">
+              <div className="text-2xl font-bold text-red-600">{soldTickets.length.toLocaleString()}</div>
+              <div className="text-sm text-red-800">Vendidos</div>
+            </Card>
+          </div>
 
           <div className="mt-6 text-center text-sm text-gray-500">
             <p>
               Total de boletos: {totalNumbers} • Disponible: {availableCount} • Retenidos: {heldTickets.length} •
-              Vendidos: {soldTickets.length} • Precio: ${safeTicketPrice.toFixed(2)} por boleto
+              Vendidos: {soldTickets.length} • Precio: ${ticketPrice.toFixed(2)} por boleto
             </p>
             {soldTickets.length > 0 && (
               <p className="text-red-700 font-medium mt-2">
